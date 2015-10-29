@@ -57,6 +57,11 @@ def write_torrent(torrent_path, data, tmp_path):
     make_torrent(torrent_path, tmp_data_path)
     return
 
+def read_torrent(path):
+    if os.path.isfile(path):
+        with open(path, 'rb') as f:
+            return libtorrent.bdecode(f.read())
+
 def main():
     # good idea to test via command line
     test = hashdata('Test')
