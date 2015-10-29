@@ -116,18 +116,17 @@ class CcasClient(GFSClient):
 
 
 class CcasMaster(GFSMaster):
-    def __init__(self, root_path_array, catalog_path, algorithm='mirror'):
+    def __init__(self, root_path_array, manifest_path, algorithm='mirror', chunksize=10):
         self.num_chunkservers = len(root_path_array) # number of disks
         self.root_path_array = root_path_array
         if algorithm in ('stripe','mirror'):
             self.algorithm = algorithm # stripe, mirror...
         else:
             self.algorithm = 'mirror' # default to mirror for data safety
-        self.catalog_path = catalog_path
-        self.chunksize = 10
+        self.manifest_path = manifest_path
+        self.chunksize = chunksize
         self.chunkrobin = 0
         self.filetable = {} # file to chunk mapping
-        self.chunktable = {} # chunkuuid to chunkloc mapping
         self.chunkservers = {} # loc id to chunkserver mapping
         self.init_chunkservers()
 
@@ -156,9 +155,9 @@ class CcasMaster(GFSMaster):
     def new_chunkloc(self, chunkuuid):
         while not self.chunkservers[self.chunkrobin].enabled:
             self.cycle_chunkrobin()
-        self.chunktable[chunkuuid] = self.chunkrobin
+        maybe_new = self.chunkrobin
         self.cycle_chunkrobin()
-        return self.chunktable[chunkuuid]
+        return maybe_new
 
     def get_retryloc(self, chunkuuid):
         while not self.chunkservers[self.chunkrobin].enabled:
@@ -168,7 +167,11 @@ class CcasMaster(GFSMaster):
         return maybe_mirror
 
     def get_chunkloc(self, chunkuuid):
-        return self.chunktable[chunkuuid]
+        while not self.chunkservers[self.chunkrobin].enabled:
+            self.cycle_chunkrobin()
+        maybe_original = self.chunkrobin
+        self.cycle_chunkrobin()
+        return maybe_original
 
     def get_chunkuuids(self, filename):
         return self.filetable[filename]
@@ -190,18 +193,30 @@ class CcasMaster(GFSMaster):
         for filename, chunkuuids in self.filetable.items():
             print filename, "with", len(chunkuuids),"chunks"
         print "Chunkservers: ", len(self.chunkservers)
-        print "Chunkserver Data:"
-        for chunkuuid, chunkloc in sorted(self.chunktable.iteritems(), key=operator.itemgetter(1)):
-            chunk = self.chunkservers[chunkloc].read(chunkuuid)
-            print chunkloc, chunkuuid, chunk
 
-    def save_chunktable(self):
-        if not os.access(self.catalog_path, os.W_OK):
-            os.makedirs(self.catalog_path)
-        for chunkuuid, chunkloc in sorted(self.chunktable.iteritems(), key=operator.itemgetter(1)):
-            os.path.join(self.local_filesystem_root, str(chunkuuid))
+    def save_filetable(self):
+        if not os.access(self.manifest_path, os.W_OK):
+            os.makedirs(self.manifest_path)
+        for filename, chunkuuids in sorted(self.filetable.iteritems(), key=operator.itemgetter(1)):
+            if filename.startswith('/'): filename = filename[1:]
+            local_filename = os.path.join(self.manifest_path, filename)
+            if not os.access(os.path.dirname(local_filename), os.W_OK):
+                os.makedirs(os.path.dirname(local_filename))
             with open(local_filename, "w") as f:
-                f.write("%i" % chunkloc)
+                f.write("%s" % ("\n".join(c for c in chunkuuids)))
+        return
+
+    def load_filetable(self):
+        if not os.access(self.manifest_path, os.W_OK):
+            os.makedirs(self.manifest_path)
+        for root, dirs, files in os.walk(self.manifest_path):
+            for fn in files:
+                fn = os.path.join(root, fn)
+                filename = fn.split(self.manifest_path)[1]
+                with open(fn, "r") as f:
+                    data = f.read()
+                chunkuuids = data.split("\n")
+        self.filetable[filename] = chunkuuids
         return
 
 
@@ -251,12 +266,12 @@ def main():
     # setup
     master = CcasMaster(
         [
-            "/tmp/gfs/disk0/chunks/",
-            "/tmp/gfs/disk1/chunks/",
+            "/tmp/gfs/disk0/chunks",
+            "/tmp/gfs/disk1/chunks",
             None,
-            "/tmp/gfs/disk3/chunks/"
+            "/tmp/gfs/disk3/chunks"
         ],
-        "/tmp/gfs/catalog/"
+        "/tmp/gfs/manifest"
         , algorithm='stripe'
         )
     client = CcasClient(master)
@@ -270,7 +285,10 @@ def main():
         """)
     print "File exists? ", client.exists("/usr/python/readme.txt")
     print client.read("/usr/python/readme.txt")
+    master.save_filetable()
 
+
+    master.load_filetable()
     # test append, read after append
     print "\nAppending..."
     client.write_append("/usr/python/readme.txt", \
