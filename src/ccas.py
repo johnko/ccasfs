@@ -7,6 +7,9 @@ import time
 import operator
 from gfs import GFSClient, GFSMaster, GFSChunkserver
 
+class VerifyException(Exception):
+    pass
+
 class CcasClient(GFSClient):
     def __init__(self, master):
         self.master = master
@@ -47,7 +50,6 @@ class CcasClient(GFSClient):
         self.master.alloc_append(filename, \
             append_chunkuuids)
 
-
     def exists(self, filename):
         return self.master.exists(filename)
 
@@ -61,7 +63,25 @@ class CcasClient(GFSClient):
         for chunkuuid in chunkuuids:
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
-            chunks.append(chunk)
+            # verify data
+            if chunkuuid != hashlib.sha256(chunk).hexdigest():
+                if self.master.algorithm == 'mirror':
+                    print ("Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
+                    for i in chunkservers:
+                        # retry on another chunkserver but let master decide the location
+                        # retryloc = i
+                        retryloc = self.master.get_retryloc(chunkuuid)
+                        chunk = chunkservers[retryloc].read(chunkuuid)
+                        if chunkuuid == hashlib.sha256(chunk).hexdigest():
+                            print ("Found a good copy of %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
+                            chunks.append(chunk)
+                            break
+                    if chunkuuid != hashlib.sha256(chunk).hexdigest():
+                        raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
+                else:
+                    raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
+            else:
+                chunks.append(chunk)
         data = reduce(lambda x, y: x + y, chunks) # reassemble in order
         return data
 
@@ -111,6 +131,11 @@ class CcasMaster(GFSMaster):
         self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
         return self.chunktable[chunkuuid]
 
+    def get_retryloc(self, chunkuuid):
+        maybe_mirror = self.chunkrobin
+        self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
+        return maybe_mirror
+
     def get_chunkloc(self, chunkuuid):
         return self.chunktable[chunkuuid]
 
@@ -156,9 +181,12 @@ class CcasChunkserver(GFSChunkserver):
     def read(self, chunkuuid):
         data = None
         local_filename = self.chunk_filename(chunkuuid)
-        with open(local_filename, "r") as f:
-            data = f.read()
-        return data
+        try:
+            with open(local_filename, "r") as f:
+                data = f.read()
+            return data
+        except:
+            return None
 
     def chunk_filename(self, chunkuuid):
         local_filename = self.local_filesystem_root + "/" \
@@ -177,7 +205,8 @@ def main():
             "/tmp/gfs/disk2/chunks/",
             "/tmp/gfs/disk3/chunks/"
         ]
-        , algorithm='stripe')
+        #, algorithm='stripe'
+        )
     client = CcasClient(master)
 
     # test write, exist, read
