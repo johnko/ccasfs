@@ -10,6 +10,9 @@ from gfs import GFSClient, GFSMaster, GFSChunkserver
 class VerifyException(Exception):
     pass
 
+def hashdata(data):
+    return hashlib.sha256(data).hexdigest()
+
 class CcasClient(GFSClient):
     def __init__(self, master):
         self.master = master
@@ -27,7 +30,7 @@ class CcasClient(GFSClient):
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
         for i in range(0, len(chunks)):
-            chunkuuid = hashlib.sha256(chunks[i]).hexdigest()
+            chunkuuid = hashdata(chunks[i])
             chunkloc = self.master.new_chunkloc(chunkuuid)
             if self.master.algorithm == 'stripe':
                 chunkservers[chunkloc].write(chunkuuid, chunks[i])
@@ -64,7 +67,7 @@ class CcasClient(GFSClient):
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
             # verify data
-            if chunkuuid != hashlib.sha256(chunk).hexdigest():
+            if chunkuuid != hashdata(chunk):
                 if self.master.algorithm == 'mirror':
                     print ("Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
                     for i in chunkservers:
@@ -72,11 +75,11 @@ class CcasClient(GFSClient):
                         # retryloc = i
                         retryloc = self.master.get_retryloc(chunkuuid)
                         chunk = chunkservers[retryloc].read(chunkuuid)
-                        if chunkuuid == hashlib.sha256(chunk).hexdigest():
-                            print ("Found a good copy of %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
+                        if chunkuuid == hashdata(chunk):
+                            print ("Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
                             chunks.append(chunk)
                             break
-                    if chunkuuid != hashlib.sha256(chunk).hexdigest():
+                    if chunkuuid != hashdata(chunk):
                         raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
                 else:
                     raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
