@@ -12,6 +12,7 @@ fi
 pkg install -y \
 python27 libffi indexinfo gettext-runtime py27-setuptools27 \
 py27-fs \
+py27-six \
 fusefs-libs
 
 ## load fuse
