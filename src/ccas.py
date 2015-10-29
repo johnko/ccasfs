@@ -208,7 +208,7 @@ def main():
             "/tmp/gfs/disk2/chunks/",
             "/tmp/gfs/disk3/chunks/"
         ]
-        #, algorithm='stripe'
+        , algorithm='stripe'
         )
     client = CcasClient(master)
 
