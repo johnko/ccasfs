@@ -14,19 +14,25 @@ class CcasClient(GFSClient):
     def write(self, filename, data): # filename is full namespace path
         if self.exists(filename): # if already exists, overwrite
             self.delete(filename)
-        num_chunks = self.num_chunks(len(data))
-        chunkuuids = hashlib.sha256(data)
-        '''self.master.alloc(filename, num_chunks)'''
-        self.write_chunks(chunkuuids, data)
+        # num_chunks = self.num_chunks(len(data))
+        chunkuuids = self.write_chunks(data)
+        self.master.alloc(filename, chunkuuids)
 
-    def write_chunks(self, chunkuuids, data):
+    def write_chunks(self, data):
         chunks = [ data[x:x+self.master.chunksize] \
             for x in range(0, len(data), self.master.chunksize) ]
         chunkservers = self.master.get_chunkservers()
-        for i in range(0, len(chunkuuids)): # write to each chunkserver
-            chunkuuid = chunkuuids[i]
-            chunkloc = self.master.get_chunkloc(chunkuuid)
-            chunkservers[chunkloc].write(chunkuuid, chunks[i])
+        chunkuuids = []
+        for i in range(0, len(chunks)):
+            chunkuuid = hashlib.sha256(chunks[i]).hexdigest()
+            chunkloc = self.master.new_chunkloc(chunkuuid)
+            if self.master.algorithm == 'stripe':
+                chunkservers[chunkloc].write(chunkuuid, chunks[i])
+            elif self.master.algorithm == 'mirror':
+                for j in range(0, len(chunkservers)):
+                    chunkservers[j].write(chunkuuid, chunks[i])
+            chunkuuids.append(chunkuuid)
+        return chunkuuids
 
     def num_chunks(self, size):
         return (size // self.master.chunksize) \
@@ -36,10 +42,11 @@ class CcasClient(GFSClient):
         if not self.exists(filename):
             raise Exception("append error, file does not exist: " \
                  + filename)
-        num_append_chunks = self.num_chunks(len(data))
-        append_chunkuuids = self.master.alloc_append(filename, \
-            num_append_chunks)
-        self.write_chunks(append_chunkuuids, data)
+        append_chunkuuids = self.write_chunks(data)
+        # num_append_chunks = self.num_chunks(len(data))
+        self.master.alloc_append(filename, \
+            append_chunkuuids)
+
 
     def exists(self, filename):
         return self.master.exists(filename)
@@ -63,8 +70,13 @@ class CcasClient(GFSClient):
 
 
 class CcasMaster(GFSMaster):
-    def __init__(self, root_path_array):
+    def __init__(self, root_path_array, algorithm='mirror'):
         self.num_chunkservers = len(root_path_array) # number of disks
+        self.root_path_array = root_path_array
+        if algorithm in ('stripe','mirror'):
+            self.algorithm = algorithm # stripe, mirror...
+        else:
+            self.algorithm = 'mirror' # default to mirror for data safety
         self.chunksize = 10
         self.chunkrobin = 0
         self.filetable = {} # file to chunk mapping
@@ -74,33 +86,30 @@ class CcasMaster(GFSMaster):
 
     def init_chunkservers(self):
         for i in range(0, self.num_chunkservers):
-            chunkserver = CcasChunkserver(i)
+            chunkserver = CcasChunkserver(self.root_path_array[i])
             self.chunkservers[i] = chunkserver
         return
 
     def get_chunkservers(self):
         return self.chunkservers
 
-    def alloc(self, filename, num_chunks): # return ordered chunkuuid list
-        chunkuuids = self.alloc_chunks(num_chunks)
+    def alloc(self, filename, chunkuuids): # return ordered chunkuuid list
         self.filetable[filename] = chunkuuids
-        return chunkuuids
+        return
 
-    def alloc_chunks(self, num_chunks):
-        chunkuuids = []
-        for i in range(0, num_chunks):
-            chunkuuid = uuid.uuid1()
-            chunkloc = self.chunkrobin
-            self.chunktable[chunkuuid] = chunkloc
-            chunkuuids.append(chunkuuid)
-            self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
-        return chunkuuids
-
-    def alloc_append(self, filename, num_append_chunks): # append chunks
+    def alloc_append(self, filename, append_chunkuuids): # append chunks
         chunkuuids = self.filetable[filename]
-        append_chunkuuids = self.alloc_chunks(num_append_chunks)
         chunkuuids.extend(append_chunkuuids)
-        return append_chunkuuids
+        self.filetable[filename] = chunkuuids
+        return
+
+    def new_chunkloc(self, chunkuuid):
+        '''
+        assign first to be fast, then round robin cycle after
+        '''
+        self.chunktable[chunkuuid] = self.chunkrobin
+        self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
+        return self.chunktable[chunkuuid]
 
     def get_chunkloc(self, chunkuuid):
         return self.chunktable[chunkuuid]
@@ -153,7 +162,7 @@ class CcasChunkserver(GFSChunkserver):
 
     def chunk_filename(self, chunkuuid):
         local_filename = self.local_filesystem_root + "/" \
-            + str(chunkuuid) + '.gfs'
+            + str(chunkuuid)
         return local_filename
 
 
@@ -161,7 +170,14 @@ def main():
     # test script for filesystem
 
     # setup
-    master = CcasMaster(["/tmp/gfs/chunks/"])
+    master = CcasMaster(
+        [
+            "/tmp/gfs/disk0/chunks/",
+            "/tmp/gfs/disk1/chunks/",
+            "/tmp/gfs/disk2/chunks/",
+            "/tmp/gfs/disk3/chunks/"
+        ]
+        , algorithm='stripe')
     client = CcasClient(master)
 
     # test write, exist, read
