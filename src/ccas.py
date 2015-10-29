@@ -29,7 +29,7 @@ class CcasClient(GFSClient):
             write_copies = 0
             chunkuuid = ccasutil.hashdata(chunks[i])
             chunkloc = self.master.new_chunkloc(chunkuuid)
-            if self.master.algorithm == 'stripe':
+            if self.master.write_algorithm == 'stripe':
                 resp = chunkservers[chunkloc].write(chunkuuid, chunks[i])
                 if resp is not None:
                     write_copies += 1
@@ -47,7 +47,7 @@ class CcasClient(GFSClient):
                             break
                         else:
                             print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-            elif self.master.algorithm == 'mirror':
+            elif self.master.write_algorithm == 'mirror':
                 for j in range(0, len(chunkservers)):
                     resp = chunkservers[j].write(chunkuuid, chunks[i])
                     if resp is not None:
@@ -116,13 +116,13 @@ class CcasClient(GFSClient):
 
 
 class CcasMaster(GFSMaster):
-    def __init__(self, root_path_array, manifest_path, algorithm='mirror', chunksize=10):
+    def __init__(self, root_path_array, manifest_path, write_algorithm='mirror', chunksize=10):
         self.num_chunkservers = len(root_path_array) # number of disks
         self.root_path_array = root_path_array
-        if algorithm in ('stripe','mirror'):
-            self.algorithm = algorithm # stripe, mirror...
+        if write_algorithm in ('stripe','mirror'):
+            self.write_algorithm = write_algorithm # stripe, mirror...
         else:
-            self.algorithm = 'mirror' # default to mirror for data safety
+            self.write_algorithm = 'mirror' # default to mirror for data safety
         self.manifest_path = manifest_path
         self.chunksize = chunksize
         self.chunkrobin = 0
@@ -296,7 +296,7 @@ def main():
             "/tmp/gfs/disk3/chunks"
         ],
         "/tmp/gfs/manifest"
-        , algorithm='stripe'
+        , write_algorithm='stripe'
         )
     client = CcasClient(master)
 
