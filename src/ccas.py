@@ -152,7 +152,7 @@ class CcasMaster(GFSMaster):
     def get_chunkservers(self):
         return self.chunkservers
 
-    def alloc(self, filename, chunkuuids): # return ordered chunkuuid list
+    def alloc(self, filename, chunkuuids): # save to manifest
         self.write_manifest(filename, chunkuuids)
         return
 
@@ -272,6 +272,8 @@ class CcasChunkserver(GFSChunkserver):
         ''' return None on any error '''
         if not self.enabled: return None
         local_filename = self.chunk_filename(chunkuuid)
+        if not os.access(os.path.dirname(local_filename), os.W_OK):
+            os.makedirs(os.path.dirname(local_filename))
         try:
             with open(local_filename, "w") as f:
                 f.write(chunk)
@@ -294,7 +296,7 @@ class CcasChunkserver(GFSChunkserver):
     def chunk_filename(self, chunkuuid):
         ''' return None on any error '''
         if not self.enabled: return None
-        local_filename = os.path.join(self.local_filesystem_root, str(chunkuuid))
+        local_filename = os.path.join(self.local_filesystem_root, os.sep.join(ccasutil.hashdepthwidth(chunkuuid, width=2, depth=4)), str(chunkuuid))
         return local_filename
 
 
@@ -304,10 +306,10 @@ def main():
     # setup
     master = CcasMaster(
         [
-            "/tmp/gfs/disk0/chunks",
-            "/tmp/gfs/disk1/chunks",
+            "/tmp/gfs/disk0/chunks/",
+            "/tmp/gfs/disk1/chunks/",
             None,
-            "/tmp/gfs/disk3/chunks"
+            "/tmp/gfs/disk3/chunks/"
         ],
         "/tmp/gfs/manifest",
         "/tmp/gfs/index",
