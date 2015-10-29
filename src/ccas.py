@@ -116,13 +116,14 @@ class CcasClient(GFSClient):
 
 
 class CcasMaster(GFSMaster):
-    def __init__(self, root_path_array, algorithm='mirror'):
+    def __init__(self, root_path_array, catalog_path, algorithm='mirror'):
         self.num_chunkservers = len(root_path_array) # number of disks
         self.root_path_array = root_path_array
         if algorithm in ('stripe','mirror'):
             self.algorithm = algorithm # stripe, mirror...
         else:
             self.algorithm = 'mirror' # default to mirror for data safety
+        self.catalog_path = catalog_path
         self.chunksize = 10
         self.chunkrobin = 0
         self.filetable = {} # file to chunk mapping
@@ -149,17 +150,21 @@ class CcasMaster(GFSMaster):
         self.filetable[filename] = chunkuuids
         return
 
-    def new_chunkloc(self, chunkuuid):
-        '''
-        assign first to be fast, then round robin cycle after
-        '''
-        self.chunktable[chunkuuid] = self.chunkrobin
+    def cycle_chunkrobin(self):
         self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
+
+    def new_chunkloc(self, chunkuuid):
+        while not self.chunkservers[self.chunkrobin].enabled:
+            self.cycle_chunkrobin()
+        self.chunktable[chunkuuid] = self.chunkrobin
+        self.cycle_chunkrobin()
         return self.chunktable[chunkuuid]
 
     def get_retryloc(self, chunkuuid):
+        while not self.chunkservers[self.chunkrobin].enabled:
+            self.cycle_chunkrobin()
         maybe_mirror = self.chunkrobin
-        self.chunkrobin = (self.chunkrobin + 1) % self.num_chunkservers
+        self.cycle_chunkrobin()
         return maybe_mirror
 
     def get_chunkloc(self, chunkuuid):
@@ -190,16 +195,31 @@ class CcasMaster(GFSMaster):
             chunk = self.chunkservers[chunkloc].read(chunkuuid)
             print chunkloc, chunkuuid, chunk
 
+    def save_chunktable(self):
+        if not os.access(self.catalog_path, os.W_OK):
+            os.makedirs(self.catalog_path)
+        for chunkuuid, chunkloc in sorted(self.chunktable.iteritems(), key=operator.itemgetter(1)):
+            os.path.join(self.local_filesystem_root, str(chunkuuid))
+            with open(local_filename, "w") as f:
+                f.write("%i" % chunkloc)
+        return
+
 
 class CcasChunkserver(GFSChunkserver):
     def __init__(self, root_path):
         self.local_filesystem_root = root_path
-        if not os.access(self.local_filesystem_root, os.W_OK):
-            os.makedirs(self.local_filesystem_root)
+        if root_path is None:
+            self.enabled = False
+        else:
+            self.enabled = True
+            if not os.access(self.local_filesystem_root, os.W_OK):
+                os.makedirs(self.local_filesystem_root)
 
     def write(self, chunkuuid, chunk):
+        ''' return None on any error '''
+        if not self.enabled: return None
+        local_filename = self.chunk_filename(chunkuuid)
         try:
-            local_filename = self.chunk_filename(chunkuuid)
             with open(local_filename, "w") as f:
                 f.write(chunk)
             return 201
@@ -207,6 +227,8 @@ class CcasChunkserver(GFSChunkserver):
             return None
 
     def read(self, chunkuuid):
+        ''' return None on any error '''
+        if not self.enabled: return None
         data = None
         local_filename = self.chunk_filename(chunkuuid)
         try:
@@ -217,6 +239,8 @@ class CcasChunkserver(GFSChunkserver):
             return None
 
     def chunk_filename(self, chunkuuid):
+        ''' return None on any error '''
+        if not self.enabled: return None
         local_filename = os.path.join(self.local_filesystem_root, str(chunkuuid))
         return local_filename
 
@@ -229,9 +253,10 @@ def main():
         [
             "/tmp/gfs/disk0/chunks/",
             "/tmp/gfs/disk1/chunks/",
-            "/tmp/gfs/disk2/chunks/",
+            None,
             "/tmp/gfs/disk3/chunks/"
-        ]
+        ],
+        "/tmp/gfs/catalog/"
         , algorithm='stripe'
         )
     client = CcasClient(master)
