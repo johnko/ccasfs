@@ -194,20 +194,21 @@ class CcasMaster(GFSMaster):
         local_filename = os.path.join(self.manifest_path, filename)
         return os.path.exists(local_filename)
 
+    def rename(self, old_path, new_path):
+        if old_path.startswith('/'): old_path = old_path[1:]
+        local_old_filename = os.path.join(self.manifest_path, old_path)
+        if new_path.startswith('/'): new_path = new_path[1:]
+        local_new_filename = os.path.join(self.manifest_path, new_path)
+        if not os.access(os.path.dirname(local_new_filename), os.W_OK):
+            os.makedirs(os.path.dirname(local_new_filename))
+        os.rename(local_old_filename, local_new_filename)
+
     def delete(self, filename): # rename for later garbage collection
         # chunkuuids = self.read_manifest(filename)
         timestamp = repr(time.time())
         deleted_filename = "/hidden/deleted/" + timestamp + filename
         # self.write_manifest(deleted_filename, chunkuuids)
-
-        if filename.startswith('/'): filename = filename[1:]
-        local_filename = os.path.join(self.manifest_path, filename)
-        if deleted_filename.startswith('/'): deleted_filename = deleted_filename[1:]
-        local_deleted_filename = os.path.join(self.manifest_path, deleted_filename)
-        if not os.access(os.path.dirname(local_deleted_filename), os.W_OK):
-            os.makedirs(os.path.dirname(local_deleted_filename))
-        os.rename(local_filename, local_deleted_filename)
-
+        self.rename(filename, deleted_filename)
         print "deleted file: " + filename + " renamed to " + \
              deleted_filename + " ready for gc"
 
