@@ -25,12 +25,37 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 '''
 
 import hashlib
+import os
+import uuid
+import libtorrent
 
 def hashdata(data):
     return hashlib.sha256(data).hexdigest()
 
 def hashdepthwidth(digest, width=2, depth=4):
     return [digest[start:start+width] for start in range(0, depth*width, width)]
+
+def make_torrent(torrent_path, data_path):
+    fs = libtorrent.file_storage()
+    libtorrent.add_files(fs, data_path)
+    t = libtorrent.create_torrent(fs)
+    t.set_creator("ccas")
+    libtorrent.set_piece_hashes(t, os.path.dirname(data_path))
+    tdata = t.generate()
+    if not os.access(os.path.dirname(torrent_path), os.W_OK):
+        os.makedirs(os.path.dirname(torrent_path))
+    with open(torrent_path, 'wb') as f:
+        f.write(libtorrent.bencode(tdata))
+    return
+
+def write_torrent(torrent_path, data, tmp_path):
+    tmp_data_path = os.path.join(tmp_path, uuid.uuid4().hex)
+    if not os.access(os.path.dirname(tmp_data_path), os.W_OK):
+        os.makedirs(os.path.dirname(tmp_data_path))
+    with open(tmp_data_path, 'wb') as f:
+        f.write(data)
+    make_torrent(torrent_path, tmp_data_path)
+    return
 
 def main():
     # good idea to test via command line
