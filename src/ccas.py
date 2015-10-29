@@ -1,5 +1,7 @@
 '''
-This extends gfs.py
+2015 John Ko <git@johnko.ca>
+This extends "gfs.py"
+No license was provided for "gfs.py" from which this file is based on.
 '''
 import hashlib
 import os
