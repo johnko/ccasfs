@@ -26,14 +26,38 @@ class CcasClient(GFSClient):
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
         for i in range(0, len(chunks)):
+            write_copies = 0
             chunkuuid = ccasutil.hashdata(chunks[i])
             chunkloc = self.master.new_chunkloc(chunkuuid)
             if self.master.algorithm == 'stripe':
-                chunkservers[chunkloc].write(chunkuuid, chunks[i])
+                resp = chunkservers[chunkloc].write(chunkuuid, chunks[i])
+                if resp is not None:
+                    write_copies += 1
+                else:
+                    print "Failed to write %s%s, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
+                    for i in chunkservers:
+                        # retry on another chunkserver but let master decide the location
+                        # retryloc = i
+                        retryloc = self.master.new_chunkloc(chunkuuid)
+                        resp = chunkservers[retryloc].write(chunkuuid, chunks[i])
+                        if resp is not None:
+                            print "Rewrote to %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                            write_copies += 1
+                            chunkuuids.append(chunkuuid)
+                            break
+                        else:
+                            print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
             elif self.master.algorithm == 'mirror':
                 for j in range(0, len(chunkservers)):
-                    chunkservers[j].write(chunkuuid, chunks[i])
-            chunkuuids.append(chunkuuid)
+                    resp = chunkservers[j].write(chunkuuid, chunks[i])
+                    if resp is not None:
+                        write_copies += 1
+                    else:
+                        print "Failed to write a copy to %s%s, consider checking the disk." % (chunkservers[j].local_filesystem_root, chunkuuid)
+            if write_copies > 0:
+                chunkuuids.append(chunkuuid)
+            else:
+                raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
         return chunkuuids
 
     def num_chunks(self, size):
@@ -60,27 +84,30 @@ class CcasClient(GFSClient):
         chunkuuids = self.master.get_chunkuuids(filename)
         chunkservers = self.master.get_chunkservers()
         for chunkuuid in chunkuuids:
+            read_copies = 0
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
             # verify data
-            if chunkuuid != ccasutil.hashdata(chunk):
-                if self.master.algorithm == 'mirror':
-                    print ("Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
-                    for i in chunkservers:
-                        # retry on another chunkserver but let master decide the location
-                        # retryloc = i
-                        retryloc = self.master.get_retryloc(chunkuuid)
-                        chunk = chunkservers[retryloc].read(chunkuuid)
-                        if chunkuuid == ccasutil.hashdata(chunk):
-                            print ("Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
-                            chunks.append(chunk)
-                            break
-                    if chunkuuid != ccasutil.hashdata(chunk):
-                        raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[retryloc].local_filesystem_root, chunkuuid))
-                else:
-                    raise VerifyException("FAULTED: Chunk %s%s failed verification." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid))
+            if chunkuuid == ccasutil.hashdata(chunk):
+                read_copies += 1
             else:
+                print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
+                for i in chunkservers:
+                    # retry on another chunkserver but let master decide the location
+                    # retryloc = i
+                    retryloc = self.master.get_retryloc(chunkuuid)
+                    chunk = chunkservers[retryloc].read(chunkuuid)
+                    if chunkuuid == ccasutil.hashdata(chunk):
+                        print "Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                        read_copies += 1
+                        chunks.append(chunk)
+                        break
+                    else:
+                        print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+            if read_copies > 0:
                 chunks.append(chunk)
+            else:
+                raise Exception("FAULTED: Chunk %s failed to verify anywhere." % (chunkuuid))
         data = reduce(lambda x, y: x + y, chunks) # reassemble in order
         return data
 
@@ -166,16 +193,18 @@ class CcasMaster(GFSMaster):
 
 class CcasChunkserver(GFSChunkserver):
     def __init__(self, root_path):
-        self.chunktable = {}
         self.local_filesystem_root = root_path
         if not os.access(self.local_filesystem_root, os.W_OK):
             os.makedirs(self.local_filesystem_root)
 
     def write(self, chunkuuid, chunk):
-        local_filename = self.chunk_filename(chunkuuid)
-        with open(local_filename, "w") as f:
-            f.write(chunk)
-        self.chunktable[chunkuuid] = local_filename
+        try:
+            local_filename = self.chunk_filename(chunkuuid)
+            with open(local_filename, "w") as f:
+                f.write(chunk)
+            return 201
+        except:
+            return None
 
     def read(self, chunkuuid):
         data = None
@@ -188,8 +217,7 @@ class CcasChunkserver(GFSChunkserver):
             return None
 
     def chunk_filename(self, chunkuuid):
-        local_filename = self.local_filesystem_root + "/" \
-            + str(chunkuuid)
+        local_filename = os.path.join(self.local_filesystem_root, str(chunkuuid))
         return local_filename
 
 
