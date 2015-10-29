@@ -126,7 +126,6 @@ class CcasMaster(GFSMaster):
         self.manifest_path = manifest_path
         self.chunksize = chunksize
         self.chunkrobin = 0
-        self.filetable = {} # file to chunk mapping
         self.chunkservers = {} # loc id to chunkserver mapping
         self.init_chunkservers()
 
@@ -140,13 +139,13 @@ class CcasMaster(GFSMaster):
         return self.chunkservers
 
     def alloc(self, filename, chunkuuids): # return ordered chunkuuid list
-        self.filetable[filename] = chunkuuids
+        self.write_manifest(filename, chunkuuids)
         return
 
     def alloc_append(self, filename, append_chunkuuids): # append chunks
-        chunkuuids = self.filetable[filename]
+        chunkuuids = self.read_manifest(filename)
         chunkuuids.extend(append_chunkuuids)
-        self.filetable[filename] = chunkuuids
+        self.write_manifest(filename, chunkuuids)
         return
 
     def cycle_chunkrobin(self):
@@ -174,26 +173,51 @@ class CcasMaster(GFSMaster):
         return maybe_original
 
     def get_chunkuuids(self, filename):
-        return self.filetable[filename]
+        return self.read_manifest(filename)
 
     def exists(self, filename):
-        return True if filename in self.filetable else False
+        if filename.startswith('/'): filename = filename[1:]
+        local_filename = os.path.join(self.manifest_path, filename)
+        return os.path.exists(local_filename)
 
     def delete(self, filename): # rename for later garbage collection
-        chunkuuids = self.filetable[filename]
-        del self.filetable[filename]
+        # chunkuuids = self.read_manifest(filename)
         timestamp = repr(time.time())
         deleted_filename = "/hidden/deleted/" + timestamp + filename
-        self.filetable[deleted_filename] = chunkuuids
+        # self.write_manifest(deleted_filename, chunkuuids)
+
+        if filename.startswith('/'): filename = filename[1:]
+        local_filename = os.path.join(self.manifest_path, filename)
+        if deleted_filename.startswith('/'): deleted_filename = deleted_filename[1:]
+        local_deleted_filename = os.path.join(self.manifest_path, deleted_filename)
+        if not os.access(os.path.dirname(local_deleted_filename), os.W_OK):
+            os.makedirs(os.path.dirname(local_deleted_filename))
+        os.rename(local_filename, local_deleted_filename)
+
         print "deleted file: " + filename + " renamed to " + \
              deleted_filename + " ready for gc"
 
     def dump_metadata(self):
-        print "Filetable:",
-        for filename, chunkuuids in self.filetable.items():
-            print filename, "with", len(chunkuuids),"chunks"
         print "Chunkservers: ", len(self.chunkservers)
 
+    def write_manifest(self, filename, chunkuuids):
+        if filename.startswith('/'): filename = filename[1:]
+        local_filename = os.path.join(self.manifest_path, filename)
+        if not os.access(os.path.dirname(local_filename), os.W_OK):
+            os.makedirs(os.path.dirname(local_filename))
+        with open(local_filename, "w") as f:
+            f.write("%s" % ("\n".join(c for c in chunkuuids)))
+        return
+
+    def read_manifest(self, filename):
+        if filename.startswith('/'): filename = filename[1:]
+        local_filename = os.path.join(self.manifest_path, filename)
+        with open(local_filename, "r") as f:
+            data = f.read()
+        chunkuuids = data.split("\n")
+        return chunkuuids
+
+    '''
     def save_filetable(self):
         if not os.access(self.manifest_path, os.W_OK):
             os.makedirs(self.manifest_path)
@@ -218,7 +242,7 @@ class CcasMaster(GFSMaster):
                 chunkuuids = data.split("\n")
         self.filetable[filename] = chunkuuids
         return
-
+    '''
 
 class CcasChunkserver(GFSChunkserver):
     def __init__(self, root_path):
@@ -285,10 +309,7 @@ def main():
         """)
     print "File exists? ", client.exists("/usr/python/readme.txt")
     print client.read("/usr/python/readme.txt")
-    master.save_filetable()
 
-
-    master.load_filetable()
     # test append, read after append
     print "\nAppending..."
     client.write_append("/usr/python/readme.txt", \
