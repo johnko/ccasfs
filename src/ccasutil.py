@@ -32,9 +32,6 @@ def hashdata(data):
 def hashdepthwidth(digest, width=2, depth=4):
     return [digest[start:start+width] for start in range(0, depth*width, width)]
 
-class VerifyException(Exception):
-    pass
-
 def main():
     # good idea to test via command line
     test = hashdata('Test')
