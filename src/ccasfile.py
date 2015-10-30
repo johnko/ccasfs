@@ -81,7 +81,7 @@ class _CCASFile(RemoteFileBuffer):
             if not toread:
                 break
             #data = self._rfile.read(toread)
-            data = self.ccasclient.read(self.filename)
+            data = self.ccasclient.read_chunk(self.filename, toread)
             datalen = len(data)
             if not datalen:
                 self._eof = True

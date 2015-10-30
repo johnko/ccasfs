@@ -28,39 +28,8 @@ class CcasClient(GFSClient):
         chunkuuids = []
         for chunk in read_in_chunks(f, self.master.chunksize):
             write_copies = 0
-            chunkuuid = ccasutil.hashdata(chunk)
-            chunkloc = self.master.new_chunkloc(chunkuuid)
-            if self.master.write_algorithm == 'stripe':
-                while not chunkservers[chunkloc].enabled:
-                    chunkloc = self.master.new_chunkloc(chunkuuid)
-                resp = chunkservers[chunkloc].write(chunkuuid, chunk)
-                if resp is not None:
-                    write_copies += 1
-                else:
-                    if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
-                    for i in chunkservers:
-                        # retry on another chunkserver but let master decide the location
-                        # retryloc = i
-                        retryloc = self.master.new_chunkloc(chunkuuid)
-                        while not chunkservers[retryloc].enabled:
-                            retryloc = self.master.new_chunkloc(chunkuuid)
-                        resp = chunkservers[retryloc].write(chunkuuid, chunk)
-                        if resp is not None:
-                            print "Rewrote to %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-                            write_copies += 1
-                            chunkuuids.append(chunkuuid)
-                            break
-                        else:
-                            if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-            elif self.master.write_algorithm == 'mirror':
-                for j in range(0, len(chunkservers)):
-                    if chunkservers[j].enabled:
-                        resp = chunkservers[j].write(chunkuuid, chunk)
-                        if resp is not None:
-                            write_copies += 1
-                        else:
-                            if self.debug > 0: print "Failed to write a copy to %s%s, consider checking the disk." % (chunkservers[j].local_filesystem_root, chunkuuid)
-            if write_copies > 0:
+            chunkuuid, write_copies = self.write_one_chunk(chunk, chunkservers)
+            if chunkuuid is not None and write_copies > 0:
                 chunkuuids.append(chunkuuid)
             else:
                 raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
@@ -68,10 +37,8 @@ class CcasClient(GFSClient):
             if op == 'append':
                 # TODO appended metadata like file size in a torrent
                 self.master.alloc_append(filename, chunkuuids)
-                self.master.write_catalog(filename, torrent_info_path)
             elif op == 'write':
                 self.master.alloc(filename, chunkuuids)
-                self.master.write_catalog(filename, torrent_info_path)
         return
 
     def write(self, filename, data): # filename is full namespace path
@@ -81,9 +48,48 @@ class CcasClient(GFSClient):
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.master.index_path, filename)
         torrent_info_path = ccasutil.write_torrent(local_filename, data, self.master.tmp_path)
+        self.master.write_catalog(filename, torrent_info_path)
         chunkuuids = self.write_chunks(data)
         self.master.alloc(filename, chunkuuids)
-        self.master.write_catalog(filename, torrent_info_path)
+
+    def write_one_chunk(self, chunk, chunkservers):
+        write_copies = 0
+        chunkuuid = ccasutil.hashdata(chunk)
+        chunkloc = self.master.new_chunkloc(chunkuuid)
+        if self.master.write_algorithm == 'stripe':
+            while not chunkservers[chunkloc].enabled:
+                chunkloc = self.master.new_chunkloc(chunkuuid)
+            resp = chunkservers[chunkloc].write(chunkuuid, chunk)
+            if resp is not None:
+                write_copies += 1
+            else:
+                if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
+                for i in chunkservers:
+                    # retry on another chunkserver but let master decide the location
+                    # retryloc = i
+                    retryloc = self.master.new_chunkloc(chunkuuid)
+                    while not chunkservers[retryloc].enabled:
+                        retryloc = self.master.new_chunkloc(chunkuuid)
+                    resp = chunkservers[retryloc].write(chunkuuid, chunk)
+                    if resp is not None:
+                        print "Rewrote to %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                        write_copies += 1
+                        chunkuuids.append(chunkuuid)
+                        break
+                    else:
+                        if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+        elif self.master.write_algorithm == 'mirror':
+            for j in range(0, len(chunkservers)):
+                if chunkservers[j].enabled:
+                    resp = chunkservers[j].write(chunkuuid, chunk)
+                    if resp is not None:
+                        write_copies += 1
+                    else:
+                        if self.debug > 0: print "Failed to write a copy to %s%s, consider checking the disk." % (chunkservers[j].local_filesystem_root, chunkuuid)
+        if write_copies < 1:
+            raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
+        return chunkuuid, write_copies
+
 
     def write_chunks(self, data):
         chunks = [ data[x:x+self.master.chunksize] \
@@ -91,40 +97,8 @@ class CcasClient(GFSClient):
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
         for i in range(0, len(chunks)):
-            write_copies = 0
-            chunkuuid = ccasutil.hashdata(chunks[i])
-            chunkloc = self.master.new_chunkloc(chunkuuid)
-            if self.master.write_algorithm == 'stripe':
-                while not chunkservers[chunkloc].enabled:
-                    chunkloc = self.master.new_chunkloc(chunkuuid)
-                resp = chunkservers[chunkloc].write(chunkuuid, chunks[i])
-                if resp is not None:
-                    write_copies += 1
-                else:
-                    if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
-                    for i in chunkservers:
-                        # retry on another chunkserver but let master decide the location
-                        # retryloc = i
-                        retryloc = self.master.new_chunkloc(chunkuuid)
-                        while not chunkservers[retryloc].enabled:
-                            retryloc = self.master.new_chunkloc(chunkuuid)
-                        resp = chunkservers[retryloc].write(chunkuuid, chunks[i])
-                        if resp is not None:
-                            print "Rewrote to %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-                            write_copies += 1
-                            chunkuuids.append(chunkuuid)
-                            break
-                        else:
-                            if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-            elif self.master.write_algorithm == 'mirror':
-                for j in range(0, len(chunkservers)):
-                    if chunkservers[j].enabled:
-                        resp = chunkservers[j].write(chunkuuid, chunks[i])
-                        if resp is not None:
-                            write_copies += 1
-                        else:
-                            if self.debug > 0: print "Failed to write a copy to %s%s, consider checking the disk." % (chunkservers[j].local_filesystem_root, chunkuuid)
-            if write_copies > 0:
+            chunkuuid, write_copies = self.write_one_chunk(chunks[i], chunkservers)
+            if chunkuuid is not None and write_copies > 0:
                 chunkuuids.append(chunkuuid)
             else:
                 raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
@@ -144,7 +118,11 @@ class CcasClient(GFSClient):
     def exists(self, filename):
         return self.master.exists(filename)
 
-    def read(self, filename): # get metadata, then read chunks direct
+    def read(self, filename, length=None):
+        # TODO file-like
+        pass
+
+    def read_all(self, filename, length=None): # get metadata, then read chunks direct
         if not self.exists(filename):
             raise Exception("read error, file does not exist: %s" % filename)
         chunks = []
@@ -282,7 +260,7 @@ class CcasMaster(GFSMaster):
     def dump_metadata(self):
         print "Chunkservers: ", len(self.chunkservers)
 
-    def write_catalog(self, filename, torrent_info_path): # save to index
+    def write_catalog(self, filename, torrent_info_path): # save to catalog
         if self.debug > 0: print "write_catalog: %s" % (filename)
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.catalog_path, filename)

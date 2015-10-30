@@ -118,7 +118,7 @@ class CCASFS(FS):
         if self.debug > 0: print "CCASFS.getcontents %s" % (path)
         if not self.exists(path):
             raise fs.errors.ResourceNotFoundError(path)
-        contents = self.ccasclient.read(path)
+        contents = self.ccasclient.read_all(path)
         return contents
 
     def _on_write_close(self, filename):
