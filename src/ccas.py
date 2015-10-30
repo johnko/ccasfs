@@ -118,7 +118,7 @@ class CcasClient(GFSClient):
     def exists(self, filename):
         return self.master.exists(filename)
 
-    def read(self, filename, length=None):
+    def read_chunk(self, filename, length=None):
         # TODO file-like
         pass
 
