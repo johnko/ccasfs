@@ -110,8 +110,7 @@ class CCASFS(FS):
                 self._path_fs.makedir(dirpath, recursive=True, allow_recreate=True)
             f = self._path_fs.open(path, 'w')
             f.close()
-        #f = ccasfile._CCASFile(self.temp_fs, path, mode, self.ccasclient, self._on_write_close, debug=self.debug)
-        f = fs.remote.RemoteFileBuffer(self, path, mode, self.ccasclient, write_on_flush=False)
+        f = ccasfile._CCASFile(self.temp_fs, path, mode, self.ccasclient, self._on_write_close, debug=self.debug)
         return f
 
     def getcontents(self, path, mode="r", encoding=None, errors=None, newline=None):
