@@ -78,7 +78,7 @@ class CCASFS(FS):
              'atomic.setcontents': False
              }
 
-    def __init__(self, root_path_array, manifest_path, index_path, tmp_path, write_algorithm="mirror", thread_synchronize=True, encoding='utf-8'):
+    def __init__(self, root_path_array, manifest_path, index_path, tmp_path, write_algorithm="mirror", thread_synchronize=True, encoding='utf-8', debug=0):
         """Create a FS that maps to chunks.
 
         :param root_path_array: a (system) path
@@ -93,11 +93,12 @@ class CCASFS(FS):
             raise ValueError("write_algorithm should be 'mirror' (default) or 'stripe'")
 
         self.root_path_array = root_path_array
+        self.debug = debug
         self.temp_fs = tempfs.TempFS()
         if not os.access(index_path, os.W_OK):
             os.makedirs(index_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
-        self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, write_algorithm=self.write_algorithm )
+        self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, write_algorithm=self.write_algorithm, debug=self.debug )
         self.ccasclient = ccas.CcasClient(self.ccasmaster)
         #  Enable long pathnames on win32
         if sys.platform == "win32":
