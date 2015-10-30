@@ -1,6 +1,14 @@
 # ccasfs
 Chunked Content Addressable Storage or "Experiments with file deduplication on low RAM systems"
 
+# Status
+
+## ** NOT READY **
+
+** DO NOT USE FOR PRODUCTION **
+
+_ IT WILL TRASH DATA _
+
 ## Dependencies
 
 ```
