@@ -204,8 +204,9 @@ class CcasMaster(GFSMaster):
 
     def delete(self, filename): # rename for later garbage collection
         # chunkuuids = self.read_manifest(filename)
-        timestamp = time.time().strftime('%Y%m%dT%H%M%SZ')
-        deleted_filename = "/hidden/deleted/" + timestamp + filename
+        iso = time.strftime('%Y%m%dT%H%M%SZ')
+        timestamp = repl(time.time())
+        deleted_filename = os.path.join( os.sep, 'hidden', 'deleted', iso, timestamp, filename)
         # self.write_manifest(deleted_filename, chunkuuids)
         self.rename(filename, deleted_filename)
         print "deleted file: " + filename + " renamed to " + \
