@@ -38,8 +38,8 @@ class _CCASFile(object):
         self.close_callback = close_callback
 
     def write(self, data):
+        if self.debug > 0: print "_CCASFile.write %s" % self.mode
         if 'w' in self.mode:
-            if self.debug > 0: print "_CCASFile.write %s" % self.mode
             return self.ccasclient.write(self.filename, data)
         elif 'a' in self.mode:
             return self.ccasclient.write_append(self.filename, data)
