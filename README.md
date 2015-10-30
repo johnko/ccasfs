@@ -47,7 +47,14 @@ find  /scratch/ccasfs/meta/index
 
 ## Known Issues
 
-- Appending data doesn't work
+- Reading data doesn't work because of not-implemente ccasclient.read_chunk(length).
+- Appending might not work.
 - Appending does not update the size or time because we didn't recreate a torrent index for it.
+- Actually, file info doesn't work either, because the torrent index is not created.
+- Need to move the catalog to hashdepthwidth.
+
+## What appeards to work
+
+- Writing a file (data is chunked and flushed on file close).
 
 Patches welcome!
