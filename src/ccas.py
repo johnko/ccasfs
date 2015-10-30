@@ -205,7 +205,7 @@ class CcasMaster(GFSMaster):
 
     def delete(self, filename): # rename for later garbage collection
         # chunkuuids = self.read_manifest(filename)
-        timestamp = repr(time.time())
+        timestamp = time.time().strftime('%Y%m%dT%H%M%SZ')
         deleted_filename = "/hidden/deleted/" + timestamp + filename
         # self.write_manifest(deleted_filename, chunkuuids)
         self.rename(filename, deleted_filename)
@@ -276,7 +276,7 @@ class CcasChunkserver(GFSChunkserver):
         if not os.access(os.path.dirname(local_filename), os.W_OK):
             os.makedirs(os.path.dirname(local_filename))
         try:
-            with open(local_filename, "w") as f:
+            with open(local_filename, "wb") as f:
                 f.write(chunk)
             return 201
         except:
@@ -288,7 +288,7 @@ class CcasChunkserver(GFSChunkserver):
         data = None
         local_filename = self.chunk_filename(chunkuuid)
         try:
-            with open(local_filename, "r") as f:
+            with open(local_filename, "rb") as f:
                 data = f.read()
             return data
         except:
