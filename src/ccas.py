@@ -286,7 +286,7 @@ class CcasMaster(GFSMaster):
         return
 
     def read_manifest(self, filename):
-        if self.debug > 0: print "read_manifest: %s %s" % (filename, chunkuuids)
+        if self.debug > 0: print "read_manifest: %s" % (filename)
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.manifest_path, filename)
         with open(local_filename, "r") as f:
