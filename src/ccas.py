@@ -78,9 +78,10 @@ class CcasClient(GFSClient):
         # track metadata like file size in a torrent
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.master.index_path, filename)
-        ccasutil.write_torrent(local_filename, data, self.master.tmp_path)
+        torrent_info_path = ccasutil.write_torrent(local_filename, data, self.master.tmp_path)
         chunkuuids = self.write_chunks(data)
         self.master.alloc(filename, chunkuuids)
+        self.master.write_index(filename, torrent_info_path)
 
     def write_chunks(self, data):
         chunks = [ data[x:x+self.master.chunksize] \
@@ -277,6 +278,16 @@ class CcasMaster(GFSMaster):
 
     def dump_metadata(self):
         print "Chunkservers: ", len(self.chunkservers)
+
+    def write_index(self, filename, torrent_info_path): # save to index
+        if self.debug > 0: print "write_index: %s" % (filename)
+        if filename.startswith('/'): filename = filename[1:]
+        local_filename = os.path.join(self.index_path, filename)
+        if not os.access(os.path.dirname(local_filename), os.W_OK):
+            os.makedirs(os.path.dirname(local_filename))
+        shutil.copyfile(torrent_info_path, local_filename)
+        os.remove(torrent_info_path)
+        return
 
     def write_manifest(self, filename, chunkuuids):
         if self.debug > 0: print "write_manifest: %s %s" % (filename, chunkuuids)
