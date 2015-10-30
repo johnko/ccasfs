@@ -37,9 +37,9 @@ class _CCASFile(object):
         self.close_callback = close_callback
 
     def write(self, data):
-        if 'w' in mode:
+        if 'w' in self.mode:
             return self.ccasclient.write(self.filename, data)
-        elif 'a' in mode:
+        elif 'a' in self.mode:
             return self.ccasclient.write_append(self.filename, data)
 
     def read(self, seek=0):
