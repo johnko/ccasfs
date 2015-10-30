@@ -151,8 +151,9 @@ class CcasClient(GFSClient):
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
             # verify data
-            if chunkuuid == ccasutil.hashdata(chunk):
-                read_copies += 1
+            if chunk is not None:
+                if chunkuuid == ccasutil.hashdata(chunk):
+                    read_copies += 1
             else:
                 if self.debug > 0: print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
                 for i in chunkservers:
