@@ -30,6 +30,7 @@ class _CCASFile(object):
     """Proxies a file object and calls a callback when the file is closed."""
 
     def __init__(self, fs, filename, mode, handler, close_callback, debug=0):
+        self.debug = debug
         self.fs = fs
         self.filename = filename
         self.mode = mode
