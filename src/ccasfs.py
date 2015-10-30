@@ -99,7 +99,7 @@ class CCASFS(FS):
             os.makedirs(index_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
         self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, write_algorithm=self.write_algorithm, debug=self.debug )
-        self.ccasclient = ccas.CcasClient(self.ccasmaster)
+        self.ccasclient = ccas.CcasClient(self.ccasmaster, debug=self.debug )
         #  Enable long pathnames on win32
         if sys.platform == "win32":
             if use_long_paths and not index_path.startswith("\\\\?\\"):
