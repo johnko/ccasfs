@@ -55,6 +55,7 @@ def write_torrent(torrent_path, data, tmp_path):
     with open(tmp_data_path, 'wb') as f:
         f.write(data)
     make_torrent(torrent_path, tmp_data_path)
+    os.remove(tmp_data_path)
     return
 
 def read_torrent(path):
