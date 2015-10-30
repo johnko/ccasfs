@@ -16,6 +16,7 @@ ccasfs = CCASFS( [
         ],
         "/scratch/ccasfs/meta/manifest",
         "/scratch/ccasfs/meta/index",
+        "/scratch/ccasfs/meta/catalog",
         "/scratch/ccasfs/tmp",
         write_algorithm="mirror",
         debug=2)

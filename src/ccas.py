@@ -68,8 +68,10 @@ class CcasClient(GFSClient):
             if op == 'append':
                 # TODO appended metadata like file size in a torrent
                 self.master.alloc_append(filename, chunkuuids)
+                self.master.write_catalog(filename, torrent_info_path)
             elif op == 'write':
                 self.master.alloc(filename, chunkuuids)
+                self.master.write_catalog(filename, torrent_info_path)
         return
 
     def write(self, filename, data): # filename is full namespace path
@@ -81,7 +83,7 @@ class CcasClient(GFSClient):
         torrent_info_path = ccasutil.write_torrent(local_filename, data, self.master.tmp_path)
         chunkuuids = self.write_chunks(data)
         self.master.alloc(filename, chunkuuids)
-        self.master.write_index(filename, torrent_info_path)
+        self.master.write_catalog(filename, torrent_info_path)
 
     def write_chunks(self, data):
         chunks = [ data[x:x+self.master.chunksize] \
@@ -185,7 +187,7 @@ class CcasClient(GFSClient):
 
 
 class CcasMaster(GFSMaster):
-    def __init__(self, root_path_array, manifest_path, index_path, tmp_path, write_algorithm='mirror', chunksize=10, debug=0):
+    def __init__(self, root_path_array, manifest_path, index_path, catalog_path, tmp_path, write_algorithm='mirror', chunksize=10, debug=0):
         self.debug = debug
         self.num_chunkservers = len(root_path_array) # number of disks
         self.root_path_array = root_path_array
@@ -194,6 +196,7 @@ class CcasMaster(GFSMaster):
         else:
             self.write_algorithm = 'mirror' # default to mirror for data safety
         self.manifest_path = manifest_path
+        self.catalog_path = catalog_path
         self.index_path = index_path
         self.tmp_path = tmp_path
         self.chunksize = chunksize
@@ -279,10 +282,10 @@ class CcasMaster(GFSMaster):
     def dump_metadata(self):
         print "Chunkservers: ", len(self.chunkservers)
 
-    def write_index(self, filename, torrent_info_path): # save to index
-        if self.debug > 0: print "write_index: %s" % (filename)
+    def write_catalog(self, filename, torrent_info_path): # save to index
+        if self.debug > 0: print "write_catalog: %s" % (filename)
         if filename.startswith('/'): filename = filename[1:]
-        local_filename = os.path.join(self.index_path, filename)
+        local_filename = os.path.join(self.catalog_path, filename)
         if not os.access(os.path.dirname(local_filename), os.W_OK):
             os.makedirs(os.path.dirname(local_filename))
         shutil.copyfile(torrent_info_path, local_filename)
