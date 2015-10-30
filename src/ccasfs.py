@@ -61,7 +61,7 @@ class CCASFS(FS):
             os.makedirs(catalog_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
         self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, catalog_path, tmp_path, \
-                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=1024*1024*256 ) # 256 MB chunks
+                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=1024*1024*64 ) # 64 MB chunks
         self.ccasclient = ccas.CcasClient(self.ccasmaster, debug=self.debug )
         #  Enable long pathnames on win32
         if sys.platform == "win32":
