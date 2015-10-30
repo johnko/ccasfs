@@ -151,8 +151,7 @@ class CcasClient(GFSClient):
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
             # verify data
-            if chunk is not None:
-                if chunkuuid == ccasutil.hashdata(chunk):
+            if chunk is not None and chunkuuid == ccasutil.hashdata(chunk):
                     read_copies += 1
             else:
                 if self.debug > 0: print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
@@ -163,7 +162,7 @@ class CcasClient(GFSClient):
                     while not chunkservers[retryloc].enabled:
                         retryloc = self.master.get_retryloc(chunkuuid)
                     chunk = chunkservers[retryloc].read(chunkuuid)
-                    if chunkuuid == ccasutil.hashdata(chunk):
+                    if chunk is not None and chunkuuid == ccasutil.hashdata(chunk):
                         if self.debug > 0: print "Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
                         read_copies += 1
                         chunks.append(chunk)
@@ -341,10 +340,9 @@ class CcasChunkserver(GFSChunkserver):
             os.makedirs(os.path.dirname(local_filename))
         # return early if the chunk already exists and we verified it
         existing_data = self.read(chunkuuid)
-        if existing_data is not None:
-            if chunkuuid == ccasutil.hashdata(existing_data):
-                if self.debug > 1: print '200 Skipping write: Chunk %s already verified on %s' % (chunkuuid, self.local_filesystem_root)
-                return 200
+        if existing_data is not None and chunkuuid == ccasutil.hashdata(existing_data):
+            if self.debug > 1: print '200 Skipping write: Chunk %s already verified on %s' % (chunkuuid, self.local_filesystem_root)
+            return 200
         try:
             with open(local_filename, "wb") as f:
                 f.write(chunk)
