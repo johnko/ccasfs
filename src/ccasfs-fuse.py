@@ -17,6 +17,7 @@ ccasfs = CCASFS( [
         "/scratch/ccasfs/meta/manifest",
         "/scratch/ccasfs/meta/index",
         "/scratch/ccasfs/tmp",
-        write_algorithm="mirror")
+        write_algorithm="mirror",
+        debug=1)
 
 mountpoint = fuse.mount(ccasfs, "/mnt", foreground=True, fsname="ccasfs")

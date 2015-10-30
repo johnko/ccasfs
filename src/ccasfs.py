@@ -38,36 +38,36 @@ class _CCASFile(object):
 
     def write(self, data):
         if 'w' in self.mode:
-            if debug > 0: print "_CCASFile.write %s" % self.mode
+            if self.debug > 0: print "_CCASFile.write %s" % self.mode
             return self.ccasclient.write(self.filename, data)
         elif 'a' in self.mode:
             return self.ccasclient.write_append(self.filename, data)
 
     def read(self, seek=0):
-        if debug > 0: print "_CCASFile.read %s" % self.mode
+        if self.debug > 0: print "_CCASFile.read %s" % self.mode
         return self.ccasclient.read(self.filename)
 
     def tell(self):
         # return self._file.tell()
-        if debug > 0: print "_CCASFile.tell"
+        if self.debug > 0: print "_CCASFile.tell"
         return
 
     def close(self):
-        if debug > 0: print "_CCASFile.close"
+        if self.debug > 0: print "_CCASFile.close"
         self.close_callback(self.filename)
 
     def flush(self):
-        if debug > 0: print "_CCASFile.flush"
+        if self.debug > 0: print "_CCASFile.flush"
         #self._file.flush()
         return
 
     def seek(self, offset, whence=0):
-        if debug > 0: print "_CCASFile.seek"
+        if self.debug > 0: print "_CCASFile.seek"
         #return self._file.seek(offset, whence)
         return
 
     def truncate(self, size):
-        if debug > 0: print "_CCASFile.truncate"
+        if self.debug > 0: print "_CCASFile.truncate"
         return
 
     def __enter__(self):
