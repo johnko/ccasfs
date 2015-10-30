@@ -218,19 +218,8 @@ class CCASFS(FS):
 
     def remove(self, path):
         sys_path = self._path_fs.getsyspath(path)
-        try:
-            os.remove(sys_path)
-            self.ccasclient.delete(path)
-        except OSError, e:
-            if e.errno == errno.EACCES and sys.platform == "win32":
-                # sometimes windows says this for attempts to remove a dir
-                if os.path.isdir(sys_path):
-                    raise ResourceInvalidError(path)
-            if e.errno == errno.EPERM and sys.platform == "darwin":
-                # sometimes OSX says this for attempts to remove a dir
-                if os.path.isdir(sys_path):
-                    raise ResourceInvalidError(path)
-            raise
+        self.ccasclient.delete(path)
+        os.remove(sys_path)
 
     def listdir(self, path="/", wildcard=None, full=False, absolute=False, dirs_only=False, files_only=False):
         #return self._path_fs.listdir(path, wildcard, full, absolute, dirs_only, files_only)
