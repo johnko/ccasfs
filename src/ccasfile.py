@@ -37,12 +37,9 @@ class _CCASFile(RemoteFileBuffer):
 
     def write(self, data):
         if self.debug > 0: print "_CCASFile.write %s" % self.mode
+        # TODO buffer until close
         with self._lock:
             self._changed = True
-            if not self.ccasclient.exists(self.filename):
-                return self.ccasclient.write(self.filename, data)
-            else:
-                return self.ccasclient.write_append(self.filename, data)
 
     def read(self, length=None):
         if self.debug > 0: print "_CCASFile.read %s" % self.mode
@@ -61,6 +58,7 @@ class _CCASFile(RemoteFileBuffer):
 
     def close(self):
         if self.debug > 0: print "_CCASFile.close"
+        self.ccasclient.write(self.filename, self.buffer)
         self.close_callback(self.filename)
 
     def flush(self):
