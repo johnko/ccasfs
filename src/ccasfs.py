@@ -10,9 +10,8 @@ import os.path
 import sys
 from fs.base import *
 from fs.path import *
-from fs.errors import *
-from fs.filelike import StringIO
-import iotools
+import fs.errors
+import fs.remote
 import tempfs
 import osfs
 import ccas
@@ -26,16 +25,21 @@ except AttributeError:
     except ImportError:
         pass
 
+
 class _CCASFile(object):
     """Proxies a file object and calls a callback when the file is closed."""
 
-    def __init__(self, fs, filename, close_callback):
+    def __init__(self, fs, filename, handler, close_callback):
         self.fs = fs
         self.filename = filename
+        self.ccasclient = handler
         self.close_callback = close_callback
 
     def write(self, data):
         return self.ccasclient.write(self.filename, data)
+
+    def read(self):
+        return self.ccasclient.read(self.filename)
 
     def tell(self):
         # return self._file.tell()
@@ -48,7 +52,7 @@ class _CCASFile(object):
         #self._file.flush()
         return
 
-    def seek(self, offset, whence):
+    def seek(self, offset, whence=0):
         #return self._file.seek(offset, whence)
         return
 
@@ -60,6 +64,7 @@ class _CCASFile(object):
 
     def __exit__(self, type, value, traceback):
         self.close()
+
 
 class CCASFS(FS):
     """A Chunking Content Addressable Store FileSystem."""
@@ -132,45 +137,29 @@ class CCASFS(FS):
             f.close()
 
     def close(self):
-        """Finalizes the zip file so that it can be read.
-        No further operations will work after this method is called."""
+        pass
 
-    @synchronize
-    @iotools.filelike_to_stream
+    def setcontents(self, path, data, chunk_size=64*1024):
+        self.ccasclient.write(path, data)
+
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None, newline=None, line_buffering=False, **kwargs):
         path = normpath(relpath(path))
-        '''
-        if 'r' in mode:
-            try:
-                contents = self.ccasclient.read(path)
-            except KeyError:
-                raise ResourceNotFoundError(path)
-            return StringIO(contents)
-        '''
-        #if 'w' in mode:
-        dirname, _filename = pathsplit(path)
-        if dirname:
-            self.temp_fs.makedir(dirname, recursive=True, allow_recreate=True)
-
-        self._add_resource(path)
-        f = _CCASFile(self.temp_fs, path, self._on_write_close)
+        if 'r' in mode and self.ccasclient.exists(path):
+            # print "read %s" % mode
+        if 'w' in mode:
+            # print "write %s" % mode
+            dirname, _filename = pathsplit(path)
+            if dirname:
+                self.temp_fs.makedir(dirname, recursive=True, allow_recreate=True)
+            self._add_resource(path)
+        f = _CCASFile(self.temp_fs, path, self.ccasclient, self._on_write_close)
         return f
 
-        #raise ValueError("Mode must contain be 'r' or 'w'")
-
-    def getcontents(self, path, mode="rb", encoding=None, errors=None, newline=None):
+    def getcontents(self, path, mode="r", encoding=None, errors=None, newline=None):
         if not self.exists(path):
-            raise ResourceNotFoundError(path)
-        path = normpath(relpath(path))
-        try:
-            contents = self.ccasclient.read(path)
-        except KeyError:
-            raise ResourceNotFoundError(path)
-        except RuntimeError:
-            raise OperationFailedError("read file", path=path, msg="3 Zip file must be opened with 'r' or 'a' to read")
-        if 'b' in mode:
-            return contents
-        return iotools.decode_binary(contents, encoding=encoding, errors=errors, newline=newline)
+            raise fs.errors.ResourceNotFoundError(path)
+        contents = self.ccasclient.read(path)
+        return contents
 
     def _on_write_close(self, filename):
         # TODO notify transport layer
@@ -251,10 +240,9 @@ class CCASFS(FS):
             return self._listdir_helper(path, paths, wildcard, full, absolute, False, False)
 
     def rename(self, src, dst):
-        path_src = self._path_fs.getsyspath(src)
         path_dst = self._path_fs.getsyspath(dst)
         try:
-            os.rename(path_src, path_dst)
+            self._path_fs.rename(src, dst)
             self.ccasclient.rename(src, dst)
         except OSError, e:
             if e.errno:
@@ -276,7 +264,7 @@ class CCASFS(FS):
         try:
             return _os_stat(path)
         except ResourceInvalidError:
-            raise ResourceNotFoundError(path)
+            raise fs.errors.ResourceNotFoundError(path)
 
     def getmeta(self, meta_name, default=NoDefaultMeta):
         if meta_name == 'free_space':
@@ -309,7 +297,7 @@ class CCASFS(FS):
 
     def getinfo(self, path):
         if not self.exists(path):
-            raise ResourceNotFoundError(path)
+            raise fs.errors.ResourceNotFoundError(path)
         fn = self._path_fs.getsyspath(path)
         info = self._stat(fn)
         info['size'] = info['st_size']
@@ -350,7 +338,6 @@ class CCASFS(FS):
     def getsize(self, path):
         return self._stat(path).st_size
 
-@convert_os_errors
 def _os_stat(path):
     """Replacement for os.stat that raises FSError subclasses."""
     st_size = None
