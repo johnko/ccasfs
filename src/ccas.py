@@ -279,7 +279,7 @@ class CcasChunkserver(GFSChunkserver):
         existing_data = self.read(chunkuuid)
         if existing_data is not None:
             if chunkuuid == ccasutil.hashdata(existing_data):
-                print '200 Skipping write: Chunk %s already exists on %s' % (chunkuuid, self.local_filesystem_root)
+                print '200 Skipping write: Chunk %s already verified on %s' % (chunkuuid, self.local_filesystem_root)
                 return 200
         try:
             with open(local_filename, "wb") as f:
