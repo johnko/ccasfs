@@ -39,6 +39,7 @@ find  /scratch/ccasfs/meta/index
 
 ## Known Issues
 
-- Appending data to a file does not update the size or time because we didn't recreate a torrent index for it.
+- Appending data doesn't work
+- Appending does not update the size or time because we didn't recreate a torrent index for it.
 
 Patches welcome!
