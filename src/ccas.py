@@ -27,14 +27,36 @@ class CcasClient(GFSClient):
     def setcontents(self, filename, f):
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
-        for i in read_in_chunks(f, self.master.chunksize):
+        for chunk in read_in_chunks(f, self.master.chunksize):
             write_copies = 0
-            chunkuuid = ccasutil.hashdata(i)
+            chunkuuid = ccasutil.hashdata(chunk)
             chunkloc = self.master.new_chunkloc(chunkuuid)
-            if self.master.write_algorithm == 'mirror':
+            if self.master.write_algorithm == 'stripe':
+                while not chunkservers[chunkloc].enabled:
+                    chunkloc = self.master.new_chunkloc(chunkuuid)
+                resp = chunkservers[chunkloc].write(chunkuuid, chunk)
+                if resp is not None:
+                    write_copies += 1
+                else:
+                    if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
+                    for i in chunkservers:
+                        # retry on another chunkserver but let master decide the location
+                        # retryloc = i
+                        retryloc = self.master.new_chunkloc(chunkuuid)
+                        while not chunkservers[retryloc].enabled:
+                            retryloc = self.master.new_chunkloc(chunkuuid)
+                        resp = chunkservers[retryloc].write(chunkuuid, chunk)
+                        if resp is not None:
+                            print "Rewrote to %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                            write_copies += 1
+                            chunkuuids.append(chunkuuid)
+                            break
+                        else:
+                            if self.debug > 0: print "Failed to write %s%s, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+            elif self.master.write_algorithm == 'mirror':
                 for j in range(0, len(chunkservers)):
                     if chunkservers[j].enabled:
-                        resp = chunkservers[j].write(chunkuuid, i)
+                        resp = chunkservers[j].write(chunkuuid, chunk)
                         if resp is not None:
                             write_copies += 1
                         else:
