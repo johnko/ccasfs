@@ -146,7 +146,7 @@ class CcasMaster(GFSMaster):
 
     def init_chunkservers(self):
         for i in range(0, self.num_chunkservers):
-            chunkserver = CcasChunkserver(self.root_path_array[i])
+            chunkserver = CcasChunkserver(self.root_path_array[i], debug=self.debug)
             self.chunkservers[i] = chunkserver
         return
 
@@ -208,11 +208,15 @@ class CcasMaster(GFSMaster):
         # chunkuuids = self.read_manifest(filename)
         iso = time.strftime('%Y%m%dT%H%M%SZ')
         timestamp = repr(time.time())
-        deleted_filename = os.path.join( 'hidden', 'deleted', iso, timestamp, filename)
+        if self.debug > 0: print "CcasMaster.delete: iso %s" % iso
+        if self.debug > 0: print "CcasMaster.delete: timestamp %s" % timestamp
+        if self.debug > 0: print "CcasMaster.delete: filename %s" % filename
+        if filename.startswith('/'): old_path = filename[1:]
+        deleted_filename = os.path.join( 'hidden', 'deleted', iso, timestamp, old_path)
+        if self.debug > 0: print "CcasMaster.delete: deleted_filename %s" % deleted_filename
         # self.write_manifest(deleted_filename, chunkuuids)
         self.rename(filename, deleted_filename)
-        if self.debug > 0: print "deleted file: " + filename + " renamed to " + \
-             deleted_filename + " ready for gc"
+        if self.debug > 0: print "deleted file: %s renamed to %s ready for gc" % (filename, deleted_filename)
 
     def dump_metadata(self):
         print "Chunkservers: ", len(self.chunkservers)
