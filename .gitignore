@@ -1,7 +1,2 @@
 ~$
 [.]pyc$
-src/gfs.py
-src/iotools.py
-src/zipfs.py
-src/tempfs.py
-src/osfs
