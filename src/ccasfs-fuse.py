@@ -12,7 +12,7 @@ logger = fs.getLogger('fs.ccasfs')
 logger.setLevel(DEBUG)
 
 ccasfs = CCASFS( [
-            "/scratch/ccasfs/"
+            "/scratch/ccasfs/chunks/"
         ],
         "/scratch/ccasfs/meta/manifest",
         "/scratch/ccasfs/meta/index",
