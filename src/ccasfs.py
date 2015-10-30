@@ -139,7 +139,7 @@ class CCASFS(FS):
     def close(self):
         pass
 
-    def setcontents(self, path, data, chunk_size=64*1024):
+    def setcontents(self, path, data, chunk_size=64*1024, encoding=None, errors=None, newline=None):
         self.ccasclient.write(path, data)
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None, newline=None, line_buffering=False, **kwargs):

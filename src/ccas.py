@@ -275,9 +275,11 @@ class CcasChunkserver(GFSChunkserver):
         if not os.access(os.path.dirname(local_filename), os.W_OK):
             os.makedirs(os.path.dirname(local_filename))
         # return early if the chunk already exists and we verified it
-        if chunkuuid == ccasutil.hashdata(self.read(chunkuuid)):
-            print '200 Skipping write: Chunk %s already exists on %s' % (chunkuuid, self.local_filesystem_root)
-            return 200
+        existing_data = self.read(chunkuuid)
+        if existing_data is not None:
+            if chunkuuid == ccasutil.hashdata(existing_data):
+                print '200 Skipping write: Chunk %s already exists on %s' % (chunkuuid, self.local_filesystem_root)
+                return 200
         try:
             with open(local_filename, "wb") as f:
                 f.write(chunk)
