@@ -67,7 +67,7 @@ class CcasClient(GFSClient):
         if append:
             # TODO appended metadata like file size in a torrent
             self.master.alloc_append(filename, chunkuuids)
-        else
+        else:
             self.master.alloc(filename, chunkuuids)
         return
 
