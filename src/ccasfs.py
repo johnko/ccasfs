@@ -112,7 +112,8 @@ class CCASFS(FS):
         if not os.access(index_path, os.W_OK):
             os.makedirs(index_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
-        self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, write_algorithm=self.write_algorithm, debug=self.debug )
+        self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, \
+                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=pow(2,10) )
         self.ccasclient = ccas.CcasClient(self.ccasmaster, debug=self.debug )
         #  Enable long pathnames on win32
         if sys.platform == "win32":
