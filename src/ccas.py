@@ -21,8 +21,12 @@ class CcasClient(GFSClient):
         self.debug = debug
         self.master = master
 
-    defappendcontents():
-
+    def appendcontents(self, filename, f):
+        if not self.exists(filename):
+            raise Exception("append error, file does not exist: %s" % filename)
+        append_chunkuuids = self.setcontents(filename, data)
+        # TODO appended metadata like file size in a torrent
+        self.master.alloc_append(filename, append_chunkuuids)
 
     def setcontents(self, filename, f):
         chunkservers = self.master.get_chunkservers()
@@ -128,20 +132,17 @@ class CcasClient(GFSClient):
 
     def write_append(self, filename, data):
         if not self.exists(filename):
-            raise Exception("append error, file does not exist: " \
-                 + filename)
+            raise Exception("append error, file does not exist: %s" % filename)
         append_chunkuuids = self.write_chunks(data)
         # TODO appended metadata like file size in a torrent
-        self.master.alloc_append(filename, \
-            append_chunkuuids)
+        self.master.alloc_append(filename, append_chunkuuids)
 
     def exists(self, filename):
         return self.master.exists(filename)
 
     def read(self, filename): # get metadata, then read chunks direct
         if not self.exists(filename):
-            raise Exception("read error, file does not exist: " \
-                + filename)
+            raise Exception("read error, file does not exist: %s" % filename)
         chunks = []
         chunkuuids = self.master.get_chunkuuids(filename)
         chunkservers = self.master.get_chunkservers()
