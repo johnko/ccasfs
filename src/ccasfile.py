@@ -23,7 +23,7 @@ class _CCASFile(RemoteFileBuffer):
         self.close_callback = close_callback
         self.write_on_flush = write_on_flush
         self.offset = 0
-        self.append = False
+        self.op = None
         wrapped_file = SpooledTemporaryFile(max_size=self.max_size_in_memory)
         self._changed = False
         self._readlen = 0  # How many bytes already loaded from rfile
@@ -35,10 +35,12 @@ class _CCASFile(RemoteFileBuffer):
         if "r" in mode or "+" in mode or "a" in mode:
             if not self.ccasclient.exists(self.filename):
                 # File was just created, force to write anything
+                self.op = 'write'
                 self._changed = True
                 self._eof = True
         else:
             # Do not use remote file object
+            self.op = 'write'
             self._eof = True
             self._changed = True
         super(RemoteFileBuffer,self).__init__(wrapped_file,mode)
@@ -157,7 +159,7 @@ class _CCASFile(RemoteFileBuffer):
 
     def _truncate(self,size):
         if size == self.offset + 1:
-            self.append = True
+            self.op = 'append'
         if self.debug > 0: print "_CCASFile.truncate %i" % size
         with self._lock:
             if not self._eof and self._readlen < size:
@@ -196,7 +198,7 @@ class _CCASFile(RemoteFileBuffer):
         if "w" in self.mode or "a" in self.mode or "+" in self.mode:
             pos = self.wrapped_file.tell()
             self.wrapped_file.seek(0)
-            self.ccasclient.setcontents(self.filename, self.wrapped_file, append=self.append)
+            self.ccasclient.setcontents(self.filename, self.wrapped_file, op=self.op)
             self.wrapped_file.seek(pos)
 
     def close(self):

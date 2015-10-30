@@ -21,8 +21,8 @@ class CcasClient(GFSClient):
         self.debug = debug
         self.master = master
 
-    def setcontents(self, filename, f, append=False):
-        if append and not self.exists(filename):
+    def setcontents(self, filename, f, op=None):
+        if op == 'append' and not self.exists(filename):
             raise Exception("append error, file does not exist: %s" % filename)
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
@@ -64,10 +64,10 @@ class CcasClient(GFSClient):
                 chunkuuids.append(chunkuuid)
             else:
                 raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
-        if append:
+        if op == 'append':
             # TODO appended metadata like file size in a torrent
             self.master.alloc_append(filename, chunkuuids)
-        else:
+        elif op == 'write':
             self.master.alloc(filename, chunkuuids)
         return
 
@@ -151,7 +151,8 @@ class CcasClient(GFSClient):
             chunkloc = self.master.get_chunkloc(chunkuuid)
             chunk = chunkservers[chunkloc].read(chunkuuid)
             # verify data
-            if chunk is not None and chunkuuid == ccasutil.hashdata(chunk):
+            if chunk is not None:
+                if chunkuuid == ccasutil.hashdata(chunk):
                     read_copies += 1
             else:
                 if self.debug > 0: print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[chunkloc].local_filesystem_root, chunkuuid)
@@ -162,13 +163,14 @@ class CcasClient(GFSClient):
                     while not chunkservers[retryloc].enabled:
                         retryloc = self.master.get_retryloc(chunkuuid)
                     chunk = chunkservers[retryloc].read(chunkuuid)
-                    if chunk is not None and chunkuuid == ccasutil.hashdata(chunk):
-                        if self.debug > 0: print "Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
-                        read_copies += 1
-                        chunks.append(chunk)
-                        break
-                    else:
-                        if self.debug > 0: print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                    if chunk is not None:
+                        if chunkuuid == ccasutil.hashdata(chunk):
+                            if self.debug > 0: print "Found a good copy at %s%s." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
+                            read_copies += 1
+                            chunks.append(chunk)
+                            break
+                        else:
+                            if self.debug > 0: print "Chunk %s%s failed verification, consider checking the disk." % (chunkservers[retryloc].local_filesystem_root, chunkuuid)
             if read_copies > 0:
                 chunks.append(chunk)
             else:
@@ -340,9 +342,10 @@ class CcasChunkserver(GFSChunkserver):
             os.makedirs(os.path.dirname(local_filename))
         # return early if the chunk already exists and we verified it
         existing_data = self.read(chunkuuid)
-        if existing_data is not None and chunkuuid == ccasutil.hashdata(existing_data):
-            if self.debug > 1: print '200 Skipping write: Chunk %s already verified on %s' % (chunkuuid, self.local_filesystem_root)
-            return 200
+        if existing_data is not None:
+            if chunkuuid == ccasutil.hashdata(existing_data):
+                if self.debug > 1: print '200 Skipping write: Chunk %s already verified on %s' % (chunkuuid, self.local_filesystem_root)
+                return 200
         try:
             with open(local_filename, "wb") as f:
                 f.write(chunk)
