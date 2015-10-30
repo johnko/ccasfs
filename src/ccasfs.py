@@ -220,7 +220,7 @@ class CCASFS(FS):
         sys_path = self._path_fs.getsyspath(path)
         try:
             os.remove(sys_path)
-            self.ccasclient.remove(path)
+            self.ccasclient.delete(path)
         except OSError, e:
             if e.errno == errno.EACCES and sys.platform == "win32":
                 # sometimes windows says this for attempts to remove a dir
