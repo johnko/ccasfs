@@ -64,11 +64,12 @@ class CcasClient(GFSClient):
                 chunkuuids.append(chunkuuid)
             else:
                 raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
-        if op == 'append':
-            # TODO appended metadata like file size in a torrent
-            self.master.alloc_append(filename, chunkuuids)
-        elif op == 'write':
-            self.master.alloc(filename, chunkuuids)
+        if len(chunkuuids) > 0:
+            if op == 'append':
+                # TODO appended metadata like file size in a torrent
+                self.master.alloc_append(filename, chunkuuids)
+            elif op == 'write':
+                self.master.alloc(filename, chunkuuids)
         return
 
     def write(self, filename, data): # filename is full namespace path
