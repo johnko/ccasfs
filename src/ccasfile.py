@@ -196,10 +196,7 @@ class _CCASFile(RemoteFileBuffer):
         if "w" in self.mode or "a" in self.mode or "+" in self.mode:
             pos = self.wrapped_file.tell()
             self.wrapped_file.seek(0)
-            if self.append:
-                self.ccasclient.appendcontents(self.filename, self.wrapped_file)
-            else:
-                self.ccasclient.setcontents(self.filename, self.wrapped_file)
+            self.ccasclient.setcontents(self.filename, self.wrapped_file, append=self.append)
             self.wrapped_file.seek(pos)
 
     def close(self):

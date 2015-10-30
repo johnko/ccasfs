@@ -21,14 +21,9 @@ class CcasClient(GFSClient):
         self.debug = debug
         self.master = master
 
-    def appendcontents(self, filename, f):
-        if not self.exists(filename):
+    def setcontents(self, filename, f, append=False):
+        if append and not self.exists(filename):
             raise Exception("append error, file does not exist: %s" % filename)
-        append_chunkuuids = self.setcontents(filename, data)
-        # TODO appended metadata like file size in a torrent
-        self.master.alloc_append(filename, append_chunkuuids)
-
-    def setcontents(self, filename, f):
         chunkservers = self.master.get_chunkservers()
         chunkuuids = []
         for chunk in read_in_chunks(f, self.master.chunksize):
@@ -69,7 +64,12 @@ class CcasClient(GFSClient):
                 chunkuuids.append(chunkuuid)
             else:
                 raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
-        return chunkuuids
+        if append:
+            # TODO appended metadata like file size in a torrent
+            self.master.alloc_append(filename, chunkuuids)
+        else
+            self.master.alloc(filename, chunkuuids)
+        return
 
     def write(self, filename, data): # filename is full namespace path
         if self.exists(filename): # if already exists, overwrite
@@ -276,6 +276,7 @@ class CcasMaster(GFSMaster):
         print "Chunkservers: ", len(self.chunkservers)
 
     def write_manifest(self, filename, chunkuuids):
+        if self.debug > 0: print "write_manifest: %s %s" % (filename, chunkuuids)
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.manifest_path, filename)
         if not os.access(os.path.dirname(local_filename), os.W_OK):
@@ -285,6 +286,7 @@ class CcasMaster(GFSMaster):
         return
 
     def read_manifest(self, filename):
+        if self.debug > 0: print "read_manifest: %s %s" % (filename, chunkuuids)
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.manifest_path, filename)
         with open(local_filename, "r") as f:
