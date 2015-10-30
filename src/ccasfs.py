@@ -146,6 +146,7 @@ class CCASFS(FS):
         path = normpath(relpath(path))
         if 'r' in mode and self.ccasclient.exists(path):
             # print "read %s" % mode
+            pass
         if 'w' in mode:
             # print "write %s" % mode
             dirname, _filename = pathsplit(path)
