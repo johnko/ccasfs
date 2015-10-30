@@ -17,8 +17,7 @@ class CcasClient(GFSClient):
     def write(self, filename, data): # filename is full namespace path
         if self.exists(filename): # if already exists, overwrite
             self.delete(filename)
-        # num_chunks = self.num_chunks(len(data))
-        # track metadata like file size
+        # track metadata like file size in a torrent
         if filename.startswith('/'): filename = filename[1:]
         local_filename = os.path.join(self.master.index_path, filename)
         ccasutil.write_torrent(local_filename, data, self.master.tmp_path)
@@ -79,7 +78,7 @@ class CcasClient(GFSClient):
             raise Exception("append error, file does not exist: " \
                  + filename)
         append_chunkuuids = self.write_chunks(data)
-        # num_append_chunks = self.num_chunks(len(data))
+        # TODO appended metadata like file size in a torrent
         self.master.alloc_append(filename, \
             append_chunkuuids)
 
@@ -275,9 +274,14 @@ class CcasChunkserver(GFSChunkserver):
         local_filename = self.chunk_filename(chunkuuid)
         if not os.access(os.path.dirname(local_filename), os.W_OK):
             os.makedirs(os.path.dirname(local_filename))
+        # return early if the chunk already exists and we verified it
+        if chunkuuid == ccasutil.hashdata(self.read(chunkuuid)):
+            print '200 Skipping write: Chunk %s already exists on %s' % (chunkuuid, self.local_filesystem_root)
+            return 200
         try:
             with open(local_filename, "wb") as f:
                 f.write(chunk)
+            print '201 Chunk written to %s%s' % (self.local_filesystem_root, chunkuuid)
             return 201
         except:
             return None
