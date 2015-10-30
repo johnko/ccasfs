@@ -16,6 +16,7 @@ import tempfs
 import osfs
 import ccas
 import ccasutil
+import ccasfile
 scandir = None
 try:
     scandir = os.scandir
@@ -24,60 +25,6 @@ except AttributeError:
         from scandir import scandir
     except ImportError:
         pass
-
-
-class _CCASFile(object):
-    """Proxies a file object and calls a callback when the file is closed."""
-
-    def __init__(self, fs, filename, mode, handler, close_callback, debug=0):
-        self.debug = debug
-        self.fs = fs
-        self.filename = filename
-        self.mode = mode
-        self.ccasclient = handler
-        self.close_callback = close_callback
-        self.append = False
-
-    def write(self, data):
-        if self.debug > 0: print "_CCASFile.write %s" % self.mode
-        if self.append:
-            return self.ccasclient.write_append(self.filename, data)
-        else:
-            return self.ccasclient.write(self.filename, data)
-
-    def read(self, seek=0):
-        if self.debug > 0: print "_CCASFile.read %s" % self.mode
-        return self.ccasclient.read(self.filename)
-
-    def tell(self):
-        # return self._file.tell()
-        if self.debug > 0: print "_CCASFile.tell"
-        return
-
-    def close(self):
-        if self.debug > 0: print "_CCASFile.close"
-        self.close_callback(self.filename)
-
-    def flush(self):
-        if self.debug > 0: print "_CCASFile.flush"
-        #self._file.flush()
-        return
-
-    def seek(self, offset, whence=0):
-        if self.debug > 0: print "_CCASFile.seek %i %i" % (offset, whence)
-        # TODO handle seek to turn on self.append
-        return
-
-    def truncate(self, size):
-        if self.debug > 0: print "_CCASFile.truncate %i" % size
-        # TODO handle seek to turn on self.append
-        return
-
-    def __enter__(self):
-        return self
-
-    def __exit__(self, type, value, traceback):
-        self.close()
 
 
 class CCASFS(FS):
@@ -113,7 +60,7 @@ class CCASFS(FS):
             os.makedirs(index_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
         self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, \
-                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=pow(2,10) )
+                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=1048576 )
         self.ccasclient = ccas.CcasClient(self.ccasmaster, debug=self.debug )
         #  Enable long pathnames on win32
         if sys.platform == "win32":
@@ -139,26 +86,16 @@ class CCASFS(FS):
     def validatepath(self, path):
         super(CCASFS, self).validatepath(path)
 
-    def _add_resource(self, path):
-        if path.endswith('/'):
-            path = path[:-1]
-            if path:
-                self._path_fs.makedir(path, recursive=True, allow_recreate=True)
-                self._path_fs.setcontents(path + '/.__ccasfs_dir__', data="git doesn't track empty dirs, so we add this file.")
-        else:
-            dirpath, _filename = pathsplit(path)
-            if dirpath:
-                self._path_fs.makedir(dirpath, recursive=True, allow_recreate=True)
-            f = self._path_fs.open(path, 'w')
-            f.close()
-
     def close(self):
+        if self.debug > 0: print "CCASFS.close"
         pass
 
     def setcontents(self, path, data, chunk_size=64*1024, encoding=None, errors=None, newline=None):
+        if self.debug > 0: print "CCASFS.setcontents %s %s" % (path, data)
         self.ccasclient.write(path, data)
 
     def open(self, path, mode='r', buffering=-1, encoding=None, errors=None, newline=None, line_buffering=False, **kwargs):
+        if self.debug > 0: print "CCASFS.open %s %s" % (path, mode)
         path = normpath(relpath(path))
         if 'r' in mode and self.ccasclient.exists(path):
             # print "read %s" % mode
@@ -168,8 +105,13 @@ class CCASFS(FS):
             dirname, _filename = pathsplit(path)
             if dirname:
                 self.temp_fs.makedir(dirname, recursive=True, allow_recreate=True)
-            self._add_resource(path)
-        f = _CCASFile(self.temp_fs, path, mode, self.ccasclient, self._on_write_close, debug=self.debug)
+            dirpath, _filename = pathsplit(path)
+            if dirpath:
+                self._path_fs.makedir(dirpath, recursive=True, allow_recreate=True)
+            f = self._path_fs.open(path, 'w')
+            f.close()
+        #f = ccasfile._CCASFile(self.temp_fs, path, mode, self.ccasclient, self._on_write_close, debug=self.debug)
+        f = fs.remote.RemoteFileBuffer(self, path, mode, self.ccasclient, write_on_flush=False)
         return f
 
     def getcontents(self, path, mode="r", encoding=None, errors=None, newline=None):
@@ -179,6 +121,7 @@ class CCASFS(FS):
         return contents
 
     def _on_write_close(self, filename):
+        if self.debug > 0: print "CCASFS._on_write_close %s" % (filename)
         # TODO notify transport layer
         return
 
@@ -193,16 +136,18 @@ class CCASFS(FS):
 
     def makedir(self, dirname, recursive=False, allow_recreate=False):
         dirname = normpath(dirname)
-        if not dirname.endswith('/'):
-            dirname += '/'
-        self._add_resource(dirname)
+        self._path_fs.makedir(dirname, recursive=True, allow_recreate=True)
+        fn = self._path_fs.getsyspath(os.path.join(dirname, '.__ccasfs_dir__'))
+        with open(fn, "w") as f:
+            f.write("git doesn't track empty dirs, so we add this file.")
 
     def removedir(self, path, recursive=False, force=False):
+        if self.debug > 0: print "CCASFS.removedir %s" % (path)
         #  Don't remove the root directory of this FS
         if path in ('', '/'):
             raise RemoveRootError(path)
         sys_path = self._path_fs.getsyspath(path)
-        fn = self._path_fs.getsyspath(path, '.__ccasfs_dir__')
+        fn = self._path_fs.getsyspath(os.path.join(path, '.__ccasfs_dir__'))
         if os.path.isfile(fn):
             os.remove(fn)
         if force:
@@ -220,6 +165,7 @@ class CCASFS(FS):
                 pass
 
     def remove(self, path):
+        if self.debug > 0: print "CCASFS.remove %s" % (path)
         sys_path = self._path_fs.getsyspath(path)
         self.ccasclient.delete(path)
         os.remove(sys_path)
@@ -246,24 +192,9 @@ class CCASFS(FS):
             return self._listdir_helper(path, paths, wildcard, full, absolute, False, False)
 
     def rename(self, src, dst):
-        path_dst = self._path_fs.getsyspath(dst)
-        try:
-            self._path_fs.rename(src, dst)
-            self.ccasclient.rename(src, dst)
-        except OSError, e:
-            if e.errno:
-                #  POSIX rename() can rename over an empty directory but gives
-                #  ENOTEMPTY if the dir has contents.  Raise UnsupportedError
-                #  instead of DirectoryEmptyError in this case.
-                if e.errno == errno.ENOTEMPTY:
-                    raise UnsupportedError("rename")
-                #  Linux (at least) gives ENOENT when trying to rename into
-                #  a directory that doesn't exist.  We want ParentMissingError
-                #  in this case.
-                if e.errno == errno.ENOENT:
-                    if not os.path.exists(os.path.dirname(path_dst)):
-                        raise ParentDirectoryMissingError(dst)
-            raise
+        if self.debug > 0: print "CCASFS.rename %s" % (path)
+        self._path_fs.rename(src, dst)
+        self.ccasclient.rename(src, dst)
 
     def _stat(self, path):
         """Stat the given path, normalising error codes."""
