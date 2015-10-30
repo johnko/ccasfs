@@ -53,7 +53,7 @@ find  /scratch/ccasfs/meta/index
 - Actually, file info doesn't work either, because the torrent index is not created.
 - Need to move the catalog to hashdepthwidth.
 
-## What appeards to work
+## What appears to work
 
 - Writing a file (data is chunked and flushed on file close).
 
