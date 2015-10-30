@@ -377,8 +377,9 @@ def main():
             None,
             "/tmp/gfs/disk3/chunks/"
         ],
-        "/tmp/gfs/manifest",
-        "/tmp/gfs/index",
+        "/tmp/gfs/meta/manifest",
+        "/tmp/gfs/meta/index",
+        "/tmp/gfs/meta/catalog",
         "/tmp/gfs/tmp"
         #, write_algorithm='stripe'
         )
