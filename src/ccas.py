@@ -9,11 +9,41 @@ import operator
 import ccasutil
 from gfs import GFSClient, GFSMaster, GFSChunkserver
 
+def read_in_chunks(file_object, chunk_size=1024):
+    while True:
+        data = file_object.read(chunk_size)
+        if not data:
+            break
+        yield data
 
 class CcasClient(GFSClient):
     def __init__(self, master, debug=0):
         self.debug = debug
         self.master = master
+
+    defappendcontents():
+
+
+    def setcontents(self, filename, f):
+        chunkservers = self.master.get_chunkservers()
+        chunkuuids = []
+        for i in read_in_chunks(f, self.master.chunksize):
+            write_copies = 0
+            chunkuuid = ccasutil.hashdata(i)
+            chunkloc = self.master.new_chunkloc(chunkuuid)
+            if self.master.write_algorithm == 'mirror':
+                for j in range(0, len(chunkservers)):
+                    if chunkservers[j].enabled:
+                        resp = chunkservers[j].write(chunkuuid, i)
+                        if resp is not None:
+                            write_copies += 1
+                        else:
+                            if self.debug > 0: print "Failed to write a copy to %s%s, consider checking the disk." % (chunkservers[j].local_filesystem_root, chunkuuid)
+            if write_copies > 0:
+                chunkuuids.append(chunkuuid)
+            else:
+                raise Exception("FAULTED: Chunk %s failed to write anywhere." % (chunkuuid))
+        return chunkuuids
 
     def write(self, filename, data): # filename is full namespace path
         if self.exists(filename): # if already exists, overwrite
@@ -211,7 +241,8 @@ class CcasMaster(GFSMaster):
         if self.debug > 0: print "CcasMaster.delete: iso %s" % iso
         if self.debug > 0: print "CcasMaster.delete: timestamp %s" % timestamp
         if self.debug > 0: print "CcasMaster.delete: filename %s" % filename
-        if filename.startswith('/'): old_path = filename[1:]
+        old_path = filename
+        if old_path.startswith('/'): old_path = old_path[1:]
         deleted_filename = os.path.join( 'hidden', 'deleted', iso, timestamp, old_path)
         if self.debug > 0: print "CcasMaster.delete: deleted_filename %s" % deleted_filename
         # self.write_manifest(deleted_filename, chunkuuids)

@@ -59,7 +59,7 @@ class CCASFS(FS):
             os.makedirs(index_path)
         self._path_fs = osfs.OSFS(index_path) #MemoryFS()
         self.ccasmaster = ccas.CcasMaster( root_path_array, manifest_path, index_path, tmp_path, \
-                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=1048576 )
+                    write_algorithm=self.write_algorithm, debug=self.debug, chunksize=1024*1024*256 ) # 256 MB chunks 
         self.ccasclient = ccas.CcasClient(self.ccasmaster, debug=self.debug )
         #  Enable long pathnames on win32
         if sys.platform == "win32":
@@ -113,6 +113,7 @@ class CCASFS(FS):
         return f
 
     def getcontents(self, path, mode="r", encoding=None, errors=None, newline=None):
+        if self.debug > 0: print "CCASFS.getcontents %s" % (path)
         if not self.exists(path):
             raise fs.errors.ResourceNotFoundError(path)
         contents = self.ccasclient.read(path)
@@ -165,10 +166,12 @@ class CCASFS(FS):
     def remove(self, path):
         if self.debug > 0: print "CCASFS.remove %s" % (path)
         sys_path = self._path_fs.getsyspath(path)
+        if self.debug > 0: print "CCASFS.remove %s" % (sys_path)
+        self._path_fs.remove(path)
         self.ccasclient.delete(path)
-        os.remove(sys_path)
 
     def listdir(self, path="/", wildcard=None, full=False, absolute=False, dirs_only=False, files_only=False):
+        if self.debug > 0: print "CCASFS.listdir %s" % (path)
         #return self._path_fs.listdir(path, wildcard, full, absolute, dirs_only, files_only)
         sys_path = self._path_fs.getsyspath(path)
         if scandir is None:
@@ -190,15 +193,16 @@ class CCASFS(FS):
             return self._listdir_helper(path, paths, wildcard, full, absolute, False, False)
 
     def rename(self, src, dst):
-        if self.debug > 0: print "CCASFS.rename %s" % (path)
+        if self.debug > 0: print "CCASFS.rename %s %s" % (src, dst)
         self._path_fs.rename(src, dst)
         self.ccasclient.rename(src, dst)
 
     def _stat(self, path):
+        if self.debug > 0: print "CCASFS._stat %s" % (path)
         """Stat the given path, normalising error codes."""
         try:
             return _os_stat(path)
-        except ResourceInvalidError:
+        except fs.errors.ResourceInvalidError:
             raise fs.errors.ResourceNotFoundError(path)
 
     def getmeta(self, meta_name, default=NoDefaultMeta):
@@ -231,6 +235,7 @@ class CCASFS(FS):
         return super(CCASFS, self).getmeta(meta_name, default)
 
     def getinfo(self, path):
+        if self.debug > 0: print "CCASFS.getinfo %s" % (path)
         if not self.exists(path):
             raise fs.errors.ResourceNotFoundError(path)
         fn = self._path_fs.getsyspath(path)
@@ -250,6 +255,7 @@ class CCASFS(FS):
         return info
 
     def getinfokeys(self, path, *keys):
+        if self.debug > 0: print "CCASFS.getinfokeys %s" % (path)
         info = {}
         fn = self._path_fs.getsyspath(path)
         stats = self._stat(fn)
