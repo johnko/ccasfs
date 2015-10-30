@@ -11,7 +11,6 @@ import sys
 from fs.base import *
 from fs.path import *
 import fs.errors
-import fs.remote
 import tempfs
 import osfs
 import ccas
