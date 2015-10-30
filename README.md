@@ -36,3 +36,9 @@ find  /scratch/ccasfs/meta/manifest
 # file index is here (when walking the /mnt, it actually just reads the torrent info here)
 find  /scratch/ccasfs/meta/index
 ```
+
+## Known Issues
+
+- Appending data to a file does not update the size or time because we didn't recreate a torrent index for it.
+
+Patches welcome!

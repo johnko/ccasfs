@@ -29,14 +29,18 @@ except AttributeError:
 class _CCASFile(object):
     """Proxies a file object and calls a callback when the file is closed."""
 
-    def __init__(self, fs, filename, handler, close_callback):
+    def __init__(self, fs, filename, mode, handler, close_callback):
         self.fs = fs
         self.filename = filename
+        self.mode = mode
         self.ccasclient = handler
         self.close_callback = close_callback
 
     def write(self, data):
-        return self.ccasclient.write(self.filename, data)
+        if 'w' in mode:
+            return self.ccasclient.write(self.filename, data)
+        elif 'a' in mode:
+            return self.ccasclient.write_append(self.filename, data)
 
     def read(self, seek=0):
         return self.ccasclient.read(self.filename)
@@ -154,7 +158,7 @@ class CCASFS(FS):
             if dirname:
                 self.temp_fs.makedir(dirname, recursive=True, allow_recreate=True)
             self._add_resource(path)
-        f = _CCASFile(self.temp_fs, path, self.ccasclient, self._on_write_close)
+        f = _CCASFile(self.temp_fs, path, mode, self.ccasclient, self._on_write_close)
         return f
 
     def getcontents(self, path, mode="r", encoding=None, errors=None, newline=None):
