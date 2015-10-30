@@ -38,8 +38,8 @@ class _CCASFile(object):
     def write(self, data):
         return self.ccasclient.write(self.filename, data)
 
-    def read(self, fh):
-        return fh.read(self.filename)
+    def read(self, seek=0):
+        return self.ccasclient.read(self.filename)
 
     def tell(self):
         # return self._file.tell()
